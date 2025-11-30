@@ -105,10 +105,27 @@ Please write only the title, nothing else.',
             'auto_update_title' => '0',
             'delete_out_of_stock' => '0',
             'prevent_new_categories' => '0',
-            'model' => 'gemini-pro'
+            'model' => 'gemini-pro',
+            'commission_enabled' => '0',
+            'commission_rules' => array()
         ));
         
         if (isset($_POST['submit']) && check_admin_referer('ai_product_desc_save', 'ai_product_desc_nonce')) {
+            // Handle commission rules
+            $commission_rules = array();
+            if (isset($_POST['commission_rules']) && is_array($_POST['commission_rules'])) {
+                foreach ($_POST['commission_rules'] as $rule) {
+                    $commission_rules[] = array(
+                        'min_price' => floatval($rule['min_price']),
+                        'max_price' => floatval($rule['max_price']),
+                        'type' => sanitize_text_field($rule['type']),
+                        'value' => floatval($rule['value']),
+                        'apply_to_regular' => isset($rule['apply_to_regular']) ? true : false,
+                        'apply_to_sale' => isset($rule['apply_to_sale']) ? true : false
+                    );
+                }
+            }
+
             $settings = array(
                 'api_provider' => sanitize_text_field($_POST['api_provider']),
                 'api_key' => sanitize_text_field($_POST['api_key']),
@@ -120,7 +137,9 @@ Please write only the title, nothing else.',
                 'auto_update_title' => isset($_POST['auto_update_title']) ? '1' : '0',
                 'delete_out_of_stock' => isset($_POST['delete_out_of_stock']) ? '1' : '0',
                 'prevent_new_categories' => isset($_POST['prevent_new_categories']) ? '1' : '0',
-                'model' => sanitize_text_field($_POST['model'])
+                'model' => sanitize_text_field($_POST['model']),
+                'commission_enabled' => isset($_POST['commission_enabled']) ? '1' : '0',
+                'commission_rules' => $commission_rules
             );
             update_option($this->option_name, $settings);
             echo '<div class="notice notice-success"><p>Settings saved successfully!</p></div>';
@@ -278,6 +297,119 @@ Please write only the title, nothing else.',
                     </tr>
                 </table>
                 
+                <hr style="margin: 40px 0;">
+                
+                <h2>💰 Price Commission / Markup Settings</h2>
+                <div class="commission-settings-section" style="background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 5px; margin-top: 20px;">
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row"><label for="commission_enabled">Enable Price Commission</label></th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="commission_enabled" id="commission_enabled" value="1" <?php checked(isset($settings['commission_enabled']) ? $settings['commission_enabled'] : '0', '1'); ?> />
+                                    Automatically apply commission/markup to product prices
+                                </label>
+                                <p class="description">When enabled, prices will be automatically adjusted based on the rules below when products are created or updated.</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <div id="commission-rules-container" style="margin-top: 20px;">
+                        <h3>Commission Rules <span style="font-size: 14px; font-weight: normal; color: #666;">(Rules are applied in order - first match wins)</span></h3>
+                        
+                        <div id="commission-rules-list">
+                            <?php
+                            $commission_rules = isset($settings['commission_rules']) ? $settings['commission_rules'] : array();
+                            if (empty($commission_rules)) {
+                                // Show one empty rule by default
+                                $commission_rules = array(
+                                    array(
+                                        'min_price' => '',
+                                        'max_price' => '',
+                                        'type' => 'fixed',
+                                        'value' => '',
+                                        'apply_to_regular' => true,
+                                        'apply_to_sale' => false
+                                    )
+                                );
+                            }
+                            
+                            foreach ($commission_rules as $index => $rule) {
+                                ?>
+                                <div class="commission-rule" style="background: white; padding: 15px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 3px; position: relative;">
+                                    <div style="display: flex; gap: 15px; align-items: flex-start; flex-wrap: wrap;">
+                                        <div style="flex: 1; min-width: 200px;">
+                                            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Price Range</label>
+                                            <div style="display: flex; gap: 5px; align-items: center;">
+                                                <input type="number" name="commission_rules[<?php echo $index; ?>][min_price]" 
+                                                       value="<?php echo esc_attr($rule['min_price']); ?>" 
+                                                       placeholder="Min" step="0.01" min="0"
+                                                       style="width: 100px;" />
+                                                <span>to</span>
+                                                <input type="number" name="commission_rules[<?php echo $index; ?>][max_price]" 
+                                                       value="<?php echo esc_attr($rule['max_price']); ?>" 
+                                                       placeholder="Max" step="0.01" min="0"
+                                                       style="width: 100px;" />
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="flex: 1; min-width: 200px;">
+                                            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Commission</label>
+                                            <div style="display: flex; gap: 5px; align-items: center;">
+                                                <input type="number" name="commission_rules[<?php echo $index; ?>][value]" 
+                                                       value="<?php echo esc_attr($rule['value']); ?>" 
+                                                       placeholder="Value" step="0.01"
+                                                       style="width: 100px;" />
+                                                <select name="commission_rules[<?php echo $index; ?>][type]" style="width: 120px;">
+                                                    <option value="fixed" <?php selected($rule['type'], 'fixed'); ?>>Fixed (+)</option>
+                                                    <option value="percentage" <?php selected($rule['type'], 'percentage'); ?>>Percentage (%)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="flex: 1; min-width: 150px;">
+                                            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Apply To</label>
+                                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                                <label style="margin: 0;">
+                                                    <input type="checkbox" name="commission_rules[<?php echo $index; ?>][apply_to_regular]" 
+                                                           value="1" <?php checked($rule['apply_to_regular'], true); ?> />
+                                                    Regular Price
+                                                </label>
+                                                <label style="margin: 0;">
+                                                    <input type="checkbox" name="commission_rules[<?php echo $index; ?>][apply_to_sale]" 
+                                                           value="1" <?php checked($rule['apply_to_sale'], true); ?> />
+                                                    Sale Price
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="align-self: flex-end;">
+                                            <button type="button" class="button remove-commission-rule" style="color: #a00;">Remove</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?php
+                            }
+                            ?>
+                        </div>
+                        
+                        <p>
+                            <button type="button" id="add-commission-rule" class="button button-secondary">+ Add New Rule</button>
+                        </p>
+                        
+                        <div class="notice notice-info" style="margin-top: 20px;">
+                            <p><strong>💡 How it works:</strong></p>
+                            <ul style="margin-left: 20px;">
+                                <li>Rules are checked in order from top to bottom</li>
+                                <li>The <strong>first matching rule</strong> is applied to each price</li>
+                                <li><strong>Fixed:</strong> Adds a specific amount (e.g., +5 adds 5 to the price)</li>
+                                <li><strong>Percentage:</strong> Adds a percentage (e.g., 10% adds 10% to the price)</li>
+                                <li>You can apply rules to Regular Price, Sale Price, or both</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
                 <?php submit_button('Save Settings'); ?>
             </form>
             
@@ -348,6 +480,82 @@ Please write only the title, nothing else.',
                 modelField.value = defaultModels[provider];
             }
         });
+        
+        // Commission Rules Management
+        (function() {
+            var ruleIndex = document.querySelectorAll('.commission-rule').length;
+            
+            // Add new rule
+            document.getElementById('add-commission-rule').addEventListener('click', function() {
+                var rulesList = document.getElementById('commission-rules-list');
+                var newRule = document.createElement('div');
+                newRule.className = 'commission-rule';
+                newRule.style.cssText = 'background: white; padding: 15px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 3px; position: relative;';
+                
+                newRule.innerHTML = `
+                    <div style="display: flex; gap: 15px; align-items: flex-start; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Price Range</label>
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                <input type="number" name="commission_rules[${ruleIndex}][min_price]" 
+                                       value="" placeholder="Min" step="0.01" min="0"
+                                       style="width: 100px;" />
+                                <span>to</span>
+                                <input type="number" name="commission_rules[${ruleIndex}][max_price]" 
+                                       value="" placeholder="Max" step="0.01" min="0"
+                                       style="width: 100px;" />
+                            </div>
+                        </div>
+                        
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Commission</label>
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                <input type="number" name="commission_rules[${ruleIndex}][value]" 
+                                       value="" placeholder="Value" step="0.01"
+                                       style="width: 100px;" />
+                                <select name="commission_rules[${ruleIndex}][type]" style="width: 120px;">
+                                    <option value="fixed">Fixed (+)</option>
+                                    <option value="percentage">Percentage (%)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Apply To</label>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <label style="margin: 0;">
+                                    <input type="checkbox" name="commission_rules[${ruleIndex}][apply_to_regular]" 
+                                           value="1" checked />
+                                    Regular Price
+                                </label>
+                                <label style="margin: 0;">
+                                    <input type="checkbox" name="commission_rules[${ruleIndex}][apply_to_sale]" 
+                                           value="1" />
+                                    Sale Price
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div style="align-self: flex-end;">
+                            <button type="button" class="button remove-commission-rule" style="color: #a00;">Remove</button>
+                        </div>
+                    </div>
+                `;
+                
+                rulesList.appendChild(newRule);
+                ruleIndex++;
+            });
+            
+            // Remove rule (using event delegation)
+            document.getElementById('commission-rules-list').addEventListener('click', function(e) {
+                if (e.target.classList.contains('remove-commission-rule')) {
+                    var rule = e.target.closest('.commission-rule');
+                    if (rule) {
+                        rule.remove();
+                    }
+                }
+            });
+        })();
         
         jQuery(document).ready(function($) {
             var categoriesData = [];
@@ -717,6 +925,9 @@ Please write only the title, nothing else.',
                 }
             }
         }
+        
+        // Apply commission to prices
+        $this->apply_commission_to_product($product_id);
     }
     
     public function generate_description_for_updated_product($product_id) {
@@ -773,6 +984,9 @@ Please write only the title, nothing else.',
                 $this->update_product_description($product_id, $description);
             }
         }
+        
+        // Apply commission to prices
+        $this->apply_commission_to_product($product_id);
     }
     
     public function handle_imported_product($product, $data) {
@@ -817,6 +1031,9 @@ Please write only the title, nothing else.',
                 $this->update_product_description($product_id, $description);
             }
         }
+        
+        // Apply commission to prices
+        $this->apply_commission_to_product($product_id);
     }
     
     public function handle_bulk_edit_product($product) {
