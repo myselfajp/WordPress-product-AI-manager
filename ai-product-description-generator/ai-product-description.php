@@ -18,7 +18,9 @@ if (!defined('ABSPATH')) {
 require_once plugin_dir_path(__FILE__) . 'includes/class-ai-api-handler.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-category-manager.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-ai-product-description-generator.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-category-matcher.php';
 
 // Initialize the plugin
 new AI_Product_Description_Generator();
+new AI_Product_Description_Category_Matcher();
 

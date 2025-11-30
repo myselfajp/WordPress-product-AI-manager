@@ -104,6 +104,7 @@ Please write only the title, nothing else.',
             'auto_update_desc' => '0',
             'auto_update_title' => '0',
             'delete_out_of_stock' => '0',
+            'prevent_new_categories' => '0',
             'model' => 'gemini-pro'
         ));
         
@@ -118,6 +119,7 @@ Please write only the title, nothing else.',
                 'auto_update_desc' => isset($_POST['auto_update_desc']) ? '1' : '0',
                 'auto_update_title' => isset($_POST['auto_update_title']) ? '1' : '0',
                 'delete_out_of_stock' => isset($_POST['delete_out_of_stock']) ? '1' : '0',
+                'prevent_new_categories' => isset($_POST['prevent_new_categories']) ? '1' : '0',
                 'model' => sanitize_text_field($_POST['model'])
             );
             update_option($this->option_name, $settings);
@@ -229,6 +231,21 @@ Please write only the title, nothing else.',
                                 Stok miktarı sıfır olan ürünleri otomatik olarak siteden sil
                             </label>
                             <p class="description">Bir ürünün stok miktarı sıfır olduğunda, ürün otomatik olarak siteden tamamen silinir ve yapay zeka işlemi yapılmaz. <strong style="color: red;">DİKKAT: Bu işlem geri alınamaz!</strong></p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><label for="prevent_new_categories">6. جلوگیری از ساخت کتگوری جدید</label></th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="prevent_new_categories" id="prevent_new_categories" value="1" <?php checked(isset($settings['prevent_new_categories']) ? $settings['prevent_new_categories'] : '0', '1'); ?> />
+                                جلوگیری از ساخت کتگوری جدید و اتصال به نزدیک‌ترین کتگوری موجود با استفاده از AI
+                            </label>
+                            <p class="description">
+                                وقتی این گزینه فعال باشد، سیستم از ساخت کتگوری جدید جلوگیری می‌کند و با استفاده از هوش مصنوعی، محصول را به نزدیک‌ترین کتگوری موجود متصل می‌کند.<br>
+                                این قابلیت برای محصولات import شده از XML، محصولات جدید و به‌روزرسانی شده کار می‌کند.<br>
+                                <strong>نکته:</strong> لیست کتگوری‌های موجود به صورت cache ذخیره می‌شود و هر 24 ساعت یکبار به‌روزرسانی می‌شود.
+                            </p>
                         </td>
                     </tr>
                     
